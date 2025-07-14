@@ -1,0 +1,290 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build output
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Sensitive configuration
+.config/
+config/
+credentials/
+secrets/
+*.key
+*.pem
+*.crt
+*.cert
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# SSH specific
+known_hosts
+authorized_keys
+
+# 10X Agentic Coding
+Knowledge/context/memory/session_*.md
+Knowledge/context/memory/temp_*.md
+.claude/temp/
+Instructions/temp/
+
+# Security - Server Credentials and Sensitive Data
+.env*
+*.env
+env/
+.env.production
+.env.staging
+.env.development
+server-credentials/
+credentials.json
+secrets.json
+*-credentials.json
+*-secrets.json
+*.credentials
+*.secrets
+
+# SSH Keys and Certificates
+*.pem
+*.key
+*.pub
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.ppk
+*.pfx
+*.p12
+*.cer
+*.crt
+*.cert
+ssl/
+certs/
+keys/
+
+# Passwords and Authentication
+passwords.txt
+*.password
+*.passwd
+auth.json
+*.auth
+tokens.json
+*.token
+*.jwt
+
+# Database Credentials
+database.yml
+db.config
+*.db
+*.sqlite
+*.sqlite3
+mongodb.conf
+redis.conf
+
+# API Keys and Tokens
+api_keys.json
+api_keys.txt
+*.apikey
+*.api_key
+apikeys/
+tokens/
+
+# Backup Files
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.swp
+*.swo
+*~
+backup/
+backups/
+
+# Log Files with Sensitive Info
+*.log
+logs/
+*.log.*
+error_log
+access_log
+debug.log
+*.err
+
+# Test Data
+test-data/
+test-credentials/
+*.test.json
+test-*.json
+
+# Session Data
+sessions/
+*.session
+session_store/
+
+# Cache with Potential Sensitive Data
+cache/
+*.cache
+.cache/
+
+# Memory Dumps and Core Files
+*.dump
+*.core
+core.*
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+.tmp/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.sublime-*
+.project
+.settings/
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.Python
+
+# Testing Reports with Sensitive Info
+test-reports/
+coverage/
+*.coverage
+.nyc_output/
+
+# SSH MCP Specific
+ssh-sessions/
+connection-logs/
+command-history/
+*.session.json
+predefined-servers.json
+server-config.json
+
+# Demo and Testing Artifacts  
+*-demo/
+*-test/
+test-results/
+demo-credentials/
+
+# Compliance and Audit Files
+compliance-reports/
+audit-logs/
+*.audit
+*.compliance
+
+# Machine Learning Models and Data
+models/
+*.model
+*.pkl
+training-data/
+ml-cache/
+
+# Personal and Organization Specific
+personal-notes/
+internal-docs/
+*.internal
+*.confidential
+*.private
+
+# GitHub Actions Secrets
+.github/workflows/secrets/
+github-secrets/
+
+# Terraform State Files
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Ansible Vault Files
+*.vault
+vault-password.txt
+
+# Docker Secrets
+docker-compose.override.yml
+.dockerignore.local
+
+# Kubernetes Secrets
+*-secret.yaml
+*-secret.yml
+secrets.yaml
+secrets.yml
+
+# CI/CD Secrets
+.travis.yml.local
+.circleci/config.local.yml
+jenkins-secrets/
+
+# Package Manager Security
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated Documentation with Examples
+docs/examples/live/
+docs/examples/production/
+
+# MCP Configuration with Credentials
+mcp-config.json
+.mcp/
+mcp-credentials/
+
+# Local Development Overrides
+*.local
+*.development
+local-config/
+dev-config/
