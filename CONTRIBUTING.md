@@ -14,7 +14,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/PreistlyPython/ssh-mcp.git
+   git clone https://github.com/LYFTIUM-INC/ssh-mcp.git
    cd ssh-mcp
    ```
 
