@@ -63,7 +63,7 @@ SSH-MCP is the first AI-native SSH management server that provides enterprise-gr
 
 ```bash
 # Clone the repository
-git clone https://github.com/lytfuim/ssh-mcp.git
+git clone https://github.com/Lyftium/ssh-mcp.git
 cd ssh-mcp
 
 # Install dependencies
@@ -479,7 +479,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Clone and install
-git clone https://github.com/lytfuim/ssh-mcp.git
+git clone https://github.com/Lyftium/ssh-mcp.git
 cd ssh-mcp
 npm install
 
@@ -498,7 +498,7 @@ npm run lint
 
 ### Security Reporting
 
-Found a security issue? Please email security@lytfuim.com instead of using the issue tracker.
+Found a security issue? Please email security@lyftium.com instead of using the issue tracker.
 
 ## 📄 License
 
@@ -513,8 +513,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - Documentation: [Complete Tool Documentation](docs/TOOLS.md)
-- Issues: [GitHub Issues](https://github.com/lytfuim/ssh-mcp/issues)
-- Discussions: [GitHub Discussions](https://github.com/lytfuim/ssh-mcp/discussions)
+- Issues: [GitHub Issues](https://github.com/Lyftium/ssh-mcp/issues)
+- Discussions: [GitHub Discussions](https://github.com/Lyftium/ssh-mcp/discussions)
 
 ---
 

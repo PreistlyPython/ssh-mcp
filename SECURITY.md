@@ -32,7 +32,7 @@ SSH-MCP is designed with security as a core principle. This document outlines ou
 If you discover a security vulnerability within SSH-MCP, please follow these steps:
 
 1. **DO NOT** open a public issue
-2. Email security@lytfuim.com with:
+2. Email security@lyftium.com with:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact
@@ -176,8 +176,8 @@ We are committed to:
 
 ## 📞 Contact
 
-- Security Issues: security@lytfuim.com
-- General Support: support@lytfuim.com
+- Security Issues: security@lyftium.com
+- General Support: support@lyftium.com
 
 ---
 
