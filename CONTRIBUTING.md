@@ -14,7 +14,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/Lyftium/ssh-mcp.git
+   git clone https://github.com/PreistlyPython/ssh-mcp.git
    cd ssh-mcp
    ```
 
@@ -200,8 +200,8 @@ Contributors will be:
 ## 📞 Getting Help
 
 - Check existing issues and discussions
-- Join our Discord community
-- Email maintainers at contribute@lyftium.com
+- Email maintainer: andre@optinampout.com
+- Business: OptinampOut (https://optinampout.com)
 
 ---
 
