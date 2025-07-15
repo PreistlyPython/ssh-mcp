@@ -1,0 +1,23 @@
+# SSH-MCP Kubernetes Namespace
+# Isolates SSH-MCP resources in dedicated namespace
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ssh-mcp
+  labels:
+    name: ssh-mcp
+    app: ssh-mcp
+    version: "1.0.0"
+    component: infrastructure
+    managed-by: lyftium-inc
+  annotations:
+    description: "SSH-MCP Enterprise MCP server with AI intelligence"
+    contact: "andre@optinampout.com"
+    documentation: "https://github.com/LYFTIUM-INC/ssh-mcp"
+    created-by: "Claude Code"
+    created-date: "2025-07-15"

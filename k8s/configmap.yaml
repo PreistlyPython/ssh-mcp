@@ -1,0 +1,235 @@
+# SSH-MCP Kubernetes ConfigMap
+# Contains configuration files for SSH-MCP components
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssh-mcp-config
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: config
+data:
+  # Redis configuration
+  redis.conf: |
+    # Redis Configuration for SSH-MCP
+    bind 0.0.0.0
+    port 6379
+    protected-mode yes
+    timeout 0
+    tcp-keepalive 300
+    
+    # Memory Management
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+    
+    # Append Only File
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    syslog-enabled no
+    
+    # Performance
+    tcp-backlog 511
+    databases 16
+    activerehashing yes
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    hz 10
+    dynamic-hz yes
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+data:
+  prometheus.yml: |
+    # Prometheus configuration for SSH-MCP monitoring
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - ssh-mcp-alertmanager:9093
+    
+    rule_files:
+      - "alert_rules.yml"
+    
+    scrape_configs:
+      - job_name: 'ssh-mcp'
+        static_configs:
+          - targets: ['ssh-mcp-service:3001']
+        metrics_path: /metrics
+        scrape_interval: 5s
+        scrape_timeout: 10s
+      
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['ssh-mcp-redis-exporter:9121']
+        scrape_interval: 5s
+      
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+        scrape_interval: 15s
+
+  alert_rules.yml: |
+    groups:
+      - name: ssh-mcp-alerts
+        rules:
+          - alert: SSHConnectionFailureRate
+            expr: rate(ssh_connection_failures_total[5m]) > 0.1
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High SSH connection failure rate"
+              description: "SSH connection failure rate is {{ $value }} failures per second"
+          
+          - alert: SSHConnectionsHigh
+            expr: ssh_active_connections > 50
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High number of active SSH connections"
+              description: "Currently {{ $value }} active SSH connections"
+          
+          - alert: SSHMCPServerDown
+            expr: up{job="ssh-mcp"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "SSH-MCP server is down"
+              description: "SSH-MCP server has been down for more than 1 minute"
+          
+          - alert: CacheHitRateLow
+            expr: cache_hit_rate < 0.7
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Low cache hit rate"
+              description: "Cache hit rate is {{ $value }}%"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+data:
+  grafana.ini: |
+    [analytics]
+    reporting_enabled = false
+    
+    [security]
+    admin_password = admin
+    cookie_secure = false
+    cookie_samesite = lax
+    
+    [users]
+    allow_sign_up = false
+    auto_assign_org = true
+    auto_assign_org_role = Viewer
+    
+    [auth.anonymous]
+    enabled = false
+    
+    [dashboards]
+    default_home_dashboard_path = /etc/grafana/provisioning/dashboards/ssh-mcp.json
+    
+    [log]
+    mode = console
+    level = info
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'localhost:587'
+      smtp_from: 'ssh-mcp-alerts@lyftium.com'
+    
+    route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'default-receiver'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+    
+    receivers:
+      - name: 'default-receiver'
+        webhook_configs:
+          - url: 'http://ssh-mcp-service:3001/alerts'
+            send_resolved: true
+      
+      - name: 'critical-alerts'
+        webhook_configs:
+          - url: 'http://ssh-mcp-service:3001/alerts/critical'
+            send_resolved: true
+      
+      - name: 'warning-alerts'
+        webhook_configs:
+          - url: 'http://ssh-mcp-service:3001/alerts/warning'
+            send_resolved: true
+    
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'instance']

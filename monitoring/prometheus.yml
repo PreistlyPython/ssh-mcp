@@ -1,0 +1,60 @@
+# Prometheus configuration for SSH-MCP monitoring
+# Generated for LYFTIUM-INC SSH-MCP project
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # SSH-MCP Server metrics
+  - job_name: 'ssh-mcp'
+    static_configs:
+      - targets: ['localhost:3001']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    scrape_timeout: 10s
+
+  # Node Exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 5s
+
+  # Redis metrics (if Redis Exporter is available)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:9121']
+    scrape_interval: 5s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 15s
+
+  # Custom SSH connection metrics
+  - job_name: 'ssh-connections'
+    static_configs:
+      - targets: ['localhost:3002']
+    metrics_path: /ssh-metrics
+    scrape_interval: 10s
+
+# Remote write configuration for long-term storage (optional)
+# remote_write:
+#   - url: "https://prometheus-remote-write-endpoint/api/v1/write"
+#     queue_config:
+#       max_samples_per_send: 1000
+#       max_shards: 200
+#       capacity: 2500

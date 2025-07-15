@@ -1,0 +1,325 @@
+# SSH-MCP Production Docker Compose
+# Production-ready deployment with all services
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+version: '3.8'
+
+services:
+  # SSH-MCP Main Application
+  ssh-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ssh-mcp-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"  # Main application port
+      - "3002:3002"  # Metrics port
+    environment:
+      # Core Configuration
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      
+      # Redis Configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=0
+      - REDIS_KEY_PREFIX=ssh-mcp:
+      - REDIS_TTL_SECONDS=300
+      
+      # Monitoring Configuration
+      - PROMETHEUS_PORT=3001
+      - GRAFANA_PORT=3000
+      - MONITORING_ENABLED=true
+      - METRICS_COLLECTION_INTERVAL=10000
+      
+      # Memory Configuration
+      - SSH_MEMORY_PERSISTENCE=true
+      - SSH_MEMORY_DATA_DIR=/app/data/memory
+      - SSH_MEMORY_MAX_ENTRIES=10000
+      - SSH_MEMORY_CONSOLIDATION_INTERVAL=3600000
+      - SSH_MEMORY_DECAY_RATE=0.1
+      - SSH_MEMORY_CONFIDENCE_THRESHOLD=0.7
+      
+      # Performance Configuration
+      - SSH_MIN_POOL_SIZE=5
+      - SSH_MAX_POOL_SIZE=100
+      
+      # Logging Configuration
+      - LOG_FILE_PATH=/app/logs/ssh-mcp.log
+      - LOG_MAX_SIZE=10485760
+      - LOG_MAX_FILES=5
+      - LOG_COMPRESSION=true
+      
+      # Audit Configuration
+      - AUDIT_ENABLED=true
+      - AUDIT_LOG_PATH=/app/logs/audit.log
+      - AUDIT_RETENTION_DAYS=90
+      
+      # Compliance Configuration
+      - COMPLIANCE_FRAMEWORKS=soc2,gdpr,hipaa
+      - COMPLIANCE_REPORTING_ENABLED=true
+      - COMPLIANCE_REPORT_PATH=/app/compliance
+      
+      # Backup Configuration
+      - BACKUP_ENABLED=true
+      - BACKUP_PATH=/app/backups
+      - BACKUP_RETENTION_DAYS=30
+      - BACKUP_COMPRESSION=true
+      
+      # Circuit Breaker Configuration
+      - CIRCUIT_BREAKER_ENABLED=true
+      - CIRCUIT_BREAKER_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60000
+      - CIRCUIT_BREAKER_RESET_TIMEOUT=300000
+      
+      # Security Configuration
+      - SSH_ALLOW_PASSWORD_AUTH=false
+      - SSH_MAX_RETRIES=3
+      - SSH_RETRY_DELAY=2000
+      - SSH_CONNECTION_TIMEOUT=20000
+      - SSH_KEEPALIVE_INTERVAL=10000
+      
+      # AI Service Configuration
+      - CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      
+      # Server Configuration (from .env)
+      - JOEDREAMZ_HOST=${JOEDREAMZ_HOST:-}
+      - JOEDREAMZ_PORT=${JOEDREAMZ_PORT:-22}
+      - JOEDREAMZ_USERNAME=${JOEDREAMZ_USERNAME:-}
+      - JOEDREAMZ_PASSWORD=${JOEDREAMZ_PASSWORD:-}
+      - JOEDREAMZ_DEFAULT_DIR=${JOEDREAMZ_DEFAULT_DIR:-}
+      - JOEDREAMZ_DESCRIPTION=${JOEDREAMZ_DESCRIPTION:-}
+      
+      - OPTINAMPOUT_HOST=${OPTINAMPOUT_HOST:-}
+      - OPTINAMPOUT_PORT=${OPTINAMPOUT_PORT:-22}
+      - OPTINAMPOUT_USERNAME=${OPTINAMPOUT_USERNAME:-}
+      - OPTINAMPOUT_PASSWORD=${OPTINAMPOUT_PASSWORD:-}
+      - OPTINAMPOUT_DEFAULT_DIR=${OPTINAMPOUT_DEFAULT_DIR:-}
+      - OPTINAMPOUT_DESCRIPTION=${OPTINAMPOUT_DESCRIPTION:-}
+      
+      - MY_SERVER_HOST=${MY_SERVER_HOST:-}
+      - MY_SERVER_PORT=${MY_SERVER_PORT:-22}
+      - MY_SERVER_USERNAME=${MY_SERVER_USERNAME:-}
+      - MY_SERVER_PASSWORD=${MY_SERVER_PASSWORD:-}
+      - MY_SERVER_DEFAULT_DIR=${MY_SERVER_DEFAULT_DIR:-}
+      - MY_SERVER_DESCRIPTION=${MY_SERVER_DESCRIPTION:-}
+    
+    volumes:
+      - ssh_mcp_data:/app/data
+      - ssh_mcp_logs:/app/logs
+      - ssh_mcp_backups:/app/backups
+      - ssh_mcp_compliance:/app/compliance
+      - ssh_keys:/app/.ssh:ro  # Mount SSH keys read-only
+    
+    depends_on:
+      - redis
+    
+    networks:
+      - ssh-mcp-network
+    
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ssh-mcp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/etc/redis/redis.conf:ro
+    command: >
+      redis-server /etc/redis/redis.conf
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    networks:
+      - ssh-mcp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ssh-mcp-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    depends_on:
+      - ssh-mcp
+    networks:
+      - ssh-mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana (Dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ssh-mcp-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/ssh-mcp.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/ssh-mcp.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ssh-mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Node Exporter (System Metrics)
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: ssh-mcp-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - ssh-mcp-network
+
+  # Redis Exporter (Redis Metrics)
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: ssh-mcp-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    depends_on:
+      - redis
+    networks:
+      - ssh-mcp-network
+
+  # Alertmanager (Alert Handling)
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: ssh-mcp-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      - prometheus
+    networks:
+      - ssh-mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx (Reverse Proxy)
+  nginx:
+    image: nginx:alpine
+    container_name: ssh-mcp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - ssh-mcp
+      - grafana
+    networks:
+      - ssh-mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ssh-mcp-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  ssh_mcp_data:
+    driver: local
+  ssh_mcp_logs:
+    driver: local
+  ssh_mcp_backups:
+    driver: local
+  ssh_mcp_compliance:
+    driver: local
+  ssh_keys:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  nginx_logs:
+    driver: local

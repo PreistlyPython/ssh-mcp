@@ -1,0 +1,123 @@
+# SSH-MCP Docker Ignore File
+# Excludes unnecessary files from Docker build context
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development files
+.git/
+.gitignore
+*.md
+README.md
+CHANGELOG.md
+LICENSE
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Test files
+test/
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage/
+.nyc_output/
+
+# Build artifacts
+build/
+dist/
+tmp/
+temp/
+
+# Log files
+*.log
+logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Docker files
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Monitoring and deployment
+monitoring/
+nginx/
+scripts/
+backups/
+compliance/
+
+# Data directories
+data/
+ssh-mcp-clean/
+ssh-mcp-clean.zip
+
+# Test files
+test-*.js
+test-*.ts
+
+# Documentation
+docs/
+Knowledge/
+Instructions/
+
+# Project specific
+.claude/
+projects/
+yolov8n.pt
+
+# Temporary files
+*.tmp
+*.temp

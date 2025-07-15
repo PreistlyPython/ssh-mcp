@@ -564,6 +564,273 @@ export class MemoryOrchestrator extends EventEmitter {
   }
 
   /**
+   * Record learning from agentic workflow execution
+   */
+  async recordLearning(
+    sessionId: string,
+    workflowName: string,
+    learningData: any
+  ): Promise<void> {
+    const learningMemory: CommandMemory = {
+      id: this.generateId(),
+      sessionId,
+      userId: learningData.userId || 'agentic-system',
+      command: `agentic_learning:${workflowName}`,
+      category: CommandCategory.SYSTEM,
+      timestamp: new Date(),
+      context: {
+        directory: learningData.context?.projectPath || '/',
+        projectType: 'agentic_workflow',
+        technology: learningData.context?.technology || 'unknown',
+        outcome: learningData.outcome?.success ? 'success' : 'failure',
+        executionTime: learningData.outcome?.performance?.duration || 0,
+        errorMessage: learningData.outcome?.errors?.join(', ')
+      },
+      metadata: {
+        frequency: 1,
+        lastUsed: new Date(),
+        confidence: learningData.confidence || 0.7,
+        effectiveness: learningData.outcome?.success ? 1.0 : 0.0,
+      }
+    };
+
+    this.commandMemories.set(learningMemory.id, learningMemory);
+
+    // Create learning insight for agentic workflows
+    const insight: LearningInsight = {
+      id: this.generateId(),
+      type: 'pattern',
+      insight: `Agentic workflow "${workflowName}" ${learningData.outcome?.success ? 'succeeded' : 'failed'} with ${learningData.outcome?.executedSteps?.length || 0} steps`,
+      confidence: learningData.confidence || 0.7,
+      actionable: true,
+      suggestion: learningData.outcome?.success 
+        ? `Pattern successful: consider reusing for similar contexts`
+        : `Pattern needs optimization: review failure points`,
+      impact: learningData.outcome?.success ? 'high' : 'medium',
+      category: CommandCategory.SYSTEM,
+      evidence: {
+        frequency: 1,
+        successRate: learningData.outcome?.success ? 1.0 : 0.0,
+        timesSeen: 1,
+        contexts: [learningData.context?.environment || 'unknown']
+      },
+      createdAt: new Date()
+    };
+
+    this.learningInsights.set(insight.id, insight);
+    this.emit(MemoryEventType.LEARNING_INSIGHT, { insight, sessionId, workflowName });
+  }
+
+  /**
+   * Get relevant context for agentic workflow execution
+   */
+  async getRelevantContext(sessionId: string, workflowName: string): Promise<any> {
+    const relevantMemories = Array.from(this.commandMemories.values())
+      .filter(memory => 
+        memory.sessionId === sessionId || 
+        memory.command.includes(workflowName) ||
+        memory.command.includes('agentic')
+      )
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 10);
+
+    const relevantPatterns = Array.from(this.commandPatterns.values())
+      .filter(pattern => 
+        pattern.pattern.includes(workflowName) ||
+        pattern.confidence > this.config.confidenceThreshold
+      )
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5);
+
+    const relevantInsights = Array.from(this.learningInsights.values())
+      .filter(insight => 
+        insight.insight.includes(workflowName) ||
+        insight.actionable
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5);
+
+    return {
+      recentMemories: relevantMemories,
+      applicablePatterns: relevantPatterns,
+      learningInsights: relevantInsights,
+      historicalOutcomes: relevantMemories.map(m => ({
+        workflow: m.command,
+        outcome: m.context.outcome,
+        executionTime: m.context.executionTime,
+        effectiveness: m.metadata.effectiveness
+      }))
+    };
+  }
+
+  /**
+   * Get learned patterns for specific agentic workflow types
+   */
+  async getLearnedPatterns(workflowType: string): Promise<any> {
+    const workflowMemories = Array.from(this.commandMemories.values())
+      .filter(memory => 
+        memory.command.includes(workflowType) ||
+        memory.context.projectType === workflowType
+      );
+
+    const successfulPatterns = workflowMemories
+      .filter(memory => memory.context.outcome === 'success')
+      .map(memory => ({
+        command: memory.command,
+        context: memory.context,
+        effectiveness: memory.metadata.effectiveness,
+        frequency: memory.metadata.frequency
+      }));
+
+    const failurePatterns = workflowMemories
+      .filter(memory => memory.context.outcome === 'failure')
+      .map(memory => ({
+        command: memory.command,
+        context: memory.context,
+        errorMessage: memory.context.errorMessage,
+        frequency: memory.metadata.frequency
+      }));
+
+    return {
+      successfulPatterns,
+      failurePatterns,
+      recommendedApproaches: successfulPatterns
+        .sort((a, b) => b.effectiveness - a.effectiveness)
+        .slice(0, 3),
+      avoidancePatterns: failurePatterns
+        .sort((a, b) => b.frequency - a.frequency)
+        .slice(0, 3)
+    };
+  }
+
+  /**
+   * Update workflow memory with execution results
+   */
+  async updateWorkflowMemory(
+    sessionId: string,
+    workflowName: string,
+    executionResult: any,
+    context: any
+  ): Promise<void> {
+    const workflowMemory: CommandMemory = {
+      id: this.generateId(),
+      sessionId,
+      userId: context.userId || 'agentic-system',
+      command: `agentic_workflow:${workflowName}`,
+      category: CommandCategory.SYSTEM,
+      timestamp: new Date(),
+      context: {
+        directory: context.projectPath || '/',
+        projectType: workflowName,
+        technology: context.technology || 'unknown',
+        outcome: executionResult.success ? 'success' : 'failure',
+        executionTime: executionResult.performance?.duration || 0,
+        errorMessage: executionResult.errors?.join(', ')
+      },
+      metadata: {
+        frequency: 1,
+        lastUsed: new Date(),
+        confidence: executionResult.success ? 0.9 : 0.3,
+        effectiveness: executionResult.success ? 1.0 : 0.0,
+      }
+    };
+
+    // Check for existing similar workflow
+    const existingWorkflow = Array.from(this.commandMemories.values())
+      .find(memory => 
+        memory.command === workflowMemory.command &&
+        memory.userId === workflowMemory.userId
+      );
+
+    if (existingWorkflow) {
+      existingWorkflow.metadata.frequency++;
+      existingWorkflow.metadata.lastUsed = new Date();
+      existingWorkflow.metadata.effectiveness = this.calculateEffectiveness(
+        existingWorkflow.metadata.effectiveness,
+        workflowMemory.metadata.effectiveness
+      );
+    } else {
+      this.commandMemories.set(workflowMemory.id, workflowMemory);
+    }
+
+    // Update patterns for agentic workflows
+    await this.updateAgenticWorkflowPatterns(workflowName, executionResult, context);
+
+    this.emit(MemoryEventType.CONTEXT_UPDATED, { 
+      workflowMemory, 
+      executionResult, 
+      workflowName 
+    });
+  }
+
+  /**
+   * Update patterns specifically for agentic workflows
+   */
+  private async updateAgenticWorkflowPatterns(
+    workflowName: string,
+    executionResult: any,
+    context: any
+  ): Promise<void> {
+    if (!this.config.patternDetectionEnabled) return;
+
+    const patternKey = `agentic_${workflowName}_${context.environment || 'default'}`;
+    const existingPattern = this.commandPatterns.get(patternKey);
+
+    if (existingPattern) {
+      existingPattern.frequency++;
+      existingPattern.lastUsed = new Date();
+      existingPattern.usageCount++;
+      
+      // Update confidence based on success
+      if (executionResult.success) {
+        existingPattern.confidence = Math.min(existingPattern.confidence + 0.1, 1.0);
+        existingPattern.effectiveness = this.calculateEffectiveness(
+          existingPattern.effectiveness,
+          1.0
+        );
+      } else {
+        existingPattern.confidence = Math.max(existingPattern.confidence - 0.05, 0.1);
+        existingPattern.effectiveness = this.calculateEffectiveness(
+          existingPattern.effectiveness,
+          0.0
+        );
+      }
+
+      // Add successful steps to suggestions
+      if (executionResult.success && executionResult.executedSteps) {
+        executionResult.executedSteps.forEach((step: string) => {
+          if (!existingPattern.suggestions.includes(step)) {
+            existingPattern.suggestions.push(step);
+          }
+        });
+      }
+    } else {
+      const newPattern: CommandPattern = {
+        id: this.generateId(),
+        pattern: patternKey,
+        category: CommandCategory.SYSTEM,
+        technology: context.technology,
+        frequency: 1,
+        confidence: executionResult.success ? 0.7 : 0.3,
+        effectiveness: executionResult.success ? 1.0 : 0.0,
+        conditions: {
+          directory: context.projectPath,
+          projectType: workflowName
+        },
+        suggestions: executionResult.executedSteps || [],
+        examples: [`agentic_workflow:${workflowName}`],
+        warnings: executionResult.success ? [] : ['Workflow execution failed - review parameters'],
+        relatedPatterns: [],
+        createdAt: new Date(),
+        lastUsed: new Date(),
+        usageCount: 1
+      };
+      
+      this.commandPatterns.set(patternKey, newPattern);
+    }
+  }
+
+  /**
    * Graceful shutdown
    */
   async shutdown(): Promise<void> {

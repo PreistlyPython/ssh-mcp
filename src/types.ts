@@ -49,3 +49,12 @@ export interface TransferFileParams {
 export interface CloseSessionParams {
   sessionId: string;
 }
+
+export interface SSHManager {
+  sessions: Map<string, SSHSession>;
+  createSession(params: CreateSessionParams): Promise<string>;
+  executeCommand(params: ExecuteCommandParams): Promise<string>;
+  transferFile(params: TransferFileParams): Promise<string>;
+  closeSession(params: CloseSessionParams): Promise<string>;
+  getSession(sessionId: string): SSHSession | undefined;
+}

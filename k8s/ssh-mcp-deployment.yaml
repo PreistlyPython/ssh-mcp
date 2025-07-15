@@ -1,0 +1,308 @@
+# SSH-MCP Kubernetes Deployment
+# Main SSH-MCP application deployment with AI intelligence
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: app
+    version: "1.0.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: app
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: app
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ssh-mcp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: ssh-mcp
+        image: lyftium/ssh-mcp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3001
+          name: app
+          protocol: TCP
+        - containerPort: 3002
+          name: metrics
+          protocol: TCP
+        env:
+        # Core Configuration
+        - name: NODE_ENV
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        
+        # Redis Configuration
+        - name: REDIS_HOST
+          value: "ssh-mcp-redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: redis-password
+        - name: REDIS_DB
+          value: "0"
+        - name: REDIS_KEY_PREFIX
+          value: "ssh-mcp:"
+        - name: REDIS_TTL_SECONDS
+          value: "300"
+        
+        # Monitoring Configuration
+        - name: PROMETHEUS_PORT
+          value: "3001"
+        - name: MONITORING_ENABLED
+          value: "true"
+        - name: METRICS_COLLECTION_INTERVAL
+          value: "10000"
+        
+        # Memory Configuration
+        - name: SSH_MEMORY_PERSISTENCE
+          value: "true"
+        - name: SSH_MEMORY_DATA_DIR
+          value: "/app/data/memory"
+        - name: SSH_MEMORY_MAX_ENTRIES
+          value: "10000"
+        
+        # Performance Configuration
+        - name: SSH_MIN_POOL_SIZE
+          value: "5"
+        - name: SSH_MAX_POOL_SIZE
+          value: "100"
+        
+        # Logging Configuration
+        - name: LOG_FILE_PATH
+          value: "/app/logs/ssh-mcp.log"
+        - name: LOG_MAX_SIZE
+          value: "10485760"
+        - name: LOG_MAX_FILES
+          value: "5"
+        - name: LOG_COMPRESSION
+          value: "true"
+        
+        # Audit Configuration
+        - name: AUDIT_ENABLED
+          value: "true"
+        - name: AUDIT_LOG_PATH
+          value: "/app/logs/audit.log"
+        - name: AUDIT_RETENTION_DAYS
+          value: "90"
+        
+        # Compliance Configuration
+        - name: COMPLIANCE_FRAMEWORKS
+          value: "soc2,gdpr,hipaa"
+        - name: COMPLIANCE_REPORTING_ENABLED
+          value: "true"
+        - name: COMPLIANCE_REPORT_PATH
+          value: "/app/compliance"
+        
+        # Backup Configuration
+        - name: BACKUP_ENABLED
+          value: "true"
+        - name: BACKUP_PATH
+          value: "/app/backups"
+        - name: BACKUP_RETENTION_DAYS
+          value: "30"
+        
+        # Security Configuration
+        - name: SSH_ALLOW_PASSWORD_AUTH
+          value: "false"
+        - name: SSH_MAX_RETRIES
+          value: "3"
+        - name: SSH_CONNECTION_TIMEOUT
+          value: "20000"
+        
+        # Server Configuration
+        - name: JOEDREAMZ_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: joedreamz-host
+        - name: JOEDREAMZ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: joedreamz-username
+        - name: JOEDREAMZ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: joedreamz-password
+        
+        - name: OPTINAMPOUT_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: optinampout-host
+        - name: OPTINAMPOUT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: optinampout-username
+        - name: OPTINAMPOUT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: optinampout-password
+        
+        # AI Service Configuration
+        - name: CONTEXT7_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: context7-api-key
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: github-token
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        - name: backups
+          mountPath: /app/backups
+        - name: compliance
+          mountPath: /app/compliance
+        - name: ssh-keys
+          mountPath: /app/.ssh
+          readOnly: true
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ssh-mcp-data
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ssh-mcp-logs
+      - name: backups
+        persistentVolumeClaim:
+          claimName: ssh-mcp-backups
+      - name: compliance
+        persistentVolumeClaim:
+          claimName: ssh-mcp-compliance
+      - name: ssh-keys
+        secret:
+          secretName: ssh-mcp-secrets
+          defaultMode: 0600
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: ssh-mcp
+                  component: app
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-service
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: app
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3001"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: ssh-mcp
+    component: app
+  ports:
+  - name: app
+    port: 3001
+    targetPort: 3001
+    protocol: TCP
+  - name: metrics
+    port: 3002
+    targetPort: 3002
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None

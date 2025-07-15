@@ -1,0 +1,69 @@
+# SSH-MCP Kubernetes Pod Disruption Budgets
+# Ensures high availability during rolling updates and node maintenance
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ssh-mcp-pdb
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: app
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ssh-mcp-redis-pdb
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: redis
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ssh-mcp-prometheus-pdb
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: prometheus
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ssh-mcp-grafana-pdb
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: grafana

@@ -1,0 +1,152 @@
+# SSH-MCP Kubernetes RBAC Configuration
+# Service accounts, roles, and bindings for SSH-MCP
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ssh-mcp
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: rbac
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ssh-mcp-role
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch", "create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ssh-mcp-rolebinding
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ssh-mcp-role
+subjects:
+- kind: ServiceAccount
+  name: ssh-mcp
+  namespace: ssh-mcp
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ssh-mcp-prometheus
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ssh-mcp-prometheus-role
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes/metrics"]
+  verbs: ["get"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ssh-mcp-prometheus-rolebinding
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ssh-mcp-prometheus-role
+subjects:
+- kind: ServiceAccount
+  name: ssh-mcp-prometheus
+  namespace: ssh-mcp
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ssh-mcp-prometheus-clusterrole
+  labels:
+    app: ssh-mcp
+    component: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes/metrics"]
+  verbs: ["get"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ssh-mcp-prometheus-clusterrolebinding
+  labels:
+    app: ssh-mcp
+    component: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ssh-mcp-prometheus-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: ssh-mcp-prometheus
+  namespace: ssh-mcp

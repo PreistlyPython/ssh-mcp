@@ -15,6 +15,7 @@ import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import fs from 'fs';
 import { SitemapTool } from './sitemap-tool.js';
+import { environmentValidator } from './config/environment-validator.js';
 import { 
   SSHSession, 
   CreateSessionParams,
@@ -36,6 +37,7 @@ import { CircuitHealthStatus, CircuitMetrics } from './resilience/circuit-breake
 import { ErrorMonitor, ErrorType, ErrorContext, ErrorAlert } from './monitoring/error-monitor.js';
 import { CredentialProtectionManager, CredentialType, CredentialMetadata, KeyRotationStatus } from './security/credential-protection.js';
 import { EnterpriseComplianceManager, ComplianceFramework, ComplianceStatus, ComplianceReport } from './compliance/enterprise-compliance.js';
+import { RedisCacheManager, CacheMetrics, createRedisCacheManager } from './cache/redis-cache-manager.js';
 import { 
   MCPOrchestrationPrompts, 
   createOrchestrationPrompt, 
@@ -57,6 +59,15 @@ import {
   RestoreOptions,
   createLifecycleManagementPrompt
 } from './backup/intelligent-backup-manager.js';
+import { 
+  AgenticOrchestrator,
+  AgenticExecutionContext,
+  AgenticOrchestrationResult,
+  createAgenticOrchestrator,
+  validateAgenticCommand,
+  createExecutionContext,
+  AGENTIC_CONSTANTS
+} from './agentic/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -132,9 +143,54 @@ const PREDEFINED_SERVERS: Record<string, ServerConfig> = {
   }
 };
 
+// Helper functions for agentic workflow management
+function categorizeWorkflow(workflowName: string): string {
+  const categoryMap: Record<string, string> = {
+    'agentic_deploy_full_stack': 'deployment',
+    'agentic_security_audit_fix': 'security',
+    'agentic_performance_optimize': 'performance',
+    'agentic_disaster_recovery': 'recovery',
+    'agentic_environment_sync': 'synchronization'
+  };
+  return categoryMap[workflowName] || 'unknown';
+}
+
+function assessComplexity(info: any): string {
+  const toolCount = info?.tools?.length || 0;
+  const parameterCount = info?.parameters?.length || 0;
+  const workflowSteps = info?.workflow?.length || 0;
+  
+  const complexityScore = toolCount + parameterCount + (workflowSteps * 2);
+  
+  if (complexityScore > 20) return 'high';
+  if (complexityScore > 10) return 'medium';
+  return 'low';
+}
+
+function estimateDuration(info: any): string {
+  const complexity = assessComplexity(info);
+  const durationMap: Record<string, string> = {
+    'low': '1-5 minutes',
+    'medium': '5-15 minutes',
+    'high': '15-60 minutes'
+  };
+  return durationMap[complexity] || '5-15 minutes';
+}
+
+function getRequirements(workflowName: string): string[] {
+  const requirementsMap: Record<string, string[]> = {
+    'agentic_deploy_full_stack': ['Valid SSH session', 'Project directory access', 'Deployment permissions'],
+    'agentic_security_audit_fix': ['Security scanning permissions', 'Credential rotation access', 'Compliance framework access'],
+    'agentic_performance_optimize': ['Performance monitoring access', 'System metrics access', 'Optimization permissions'],
+    'agentic_disaster_recovery': ['Backup access', 'Recovery permissions', 'System restoration access'],
+    'agentic_environment_sync': ['Multi-environment access', 'Configuration permissions', 'Synchronization access']
+  };
+  return requirementsMap[workflowName] || ['Valid SSH session'];
+}
+
 // SSH Service class to manage connections
 class SSHService {
-  private sessions: Map<string, SSHSession> = new Map();
+  public sessions: Map<string, SSHSession> = new Map();
   private readonly connectionPool: AdaptiveConnectionPool;
   private sitemapTool: SitemapTool;
   private readonly startTime = Date.now();
@@ -145,7 +201,7 @@ class SSHService {
   // Security and enterprise features
   private encryptionManager: SessionEncryptionManager;
   private authManager: EnterpriseAuthManager;
-  private auditLogger: AuditLogger;
+  public auditLogger: AuditLogger;
   private mfaManager: MFAManager;
   
   // AI and intelligence features
@@ -167,6 +223,12 @@ class SSHService {
   
   // Smart file editing
   public smartFileEditor: SmartFileEditor;
+  
+  // Agentic workflow orchestration
+  public agenticOrchestrator: AgenticOrchestrator;
+  
+  // Cache management
+  private cacheManager: RedisCacheManager;
 
   constructor() {
     // Initialize security components
@@ -200,6 +262,12 @@ class SSHService {
     // Initialize smart file editor
     this.smartFileEditor = new SmartFileEditor(this);
     
+    // Initialize agentic orchestrator (will be initialized asynchronously)
+    this.agenticOrchestrator = new AgenticOrchestrator(this.memoryOrchestrator, this);
+    
+    // Initialize cache manager
+    this.cacheManager = createRedisCacheManager({}, this.auditLogger);
+    
     // Initialize adaptive connection pool
     this.connectionPool = new AdaptiveConnectionPool({
       minPoolSize: parseInt(process.env.SSH_MIN_POOL_SIZE || '5'),
@@ -215,11 +283,24 @@ class SSHService {
     
     // Setup security event handlers
     this.setupSecurityEventHandlers();
+    
+    // Initialize agentic orchestrator asynchronously
+    this.initializeAgenticOrchestrator();
   }
 
   private async initializeConnectionPool(): Promise<void> {
     // Adaptive connection pool is already initialized in constructor
     console.error(`Adaptive connection pool initialized with intelligent scaling and health monitoring`);
+  }
+
+  private async initializeAgenticOrchestrator(): Promise<void> {
+    try {
+      await this.agenticOrchestrator.initialize();
+      console.error('✅ Agentic orchestrator initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize agentic orchestrator:', error);
+      // Continue without agentic features - they can be enabled later
+    }
   }
 
   private setupSecurityEventHandlers(): void {
@@ -274,22 +355,100 @@ class SSHService {
 
   // Adaptive connection pool methods - delegated to the pool instance
 
-  // Quick connect to predefined servers
+  // Quick connect to predefined servers with robust validation
   async quickConnect(serverName: string): Promise<string> {
-    const config = PREDEFINED_SERVERS[serverName];
-    if (!config) {
-      throw new Error(`Unknown server configuration: ${serverName}. Available servers: ${Object.keys(PREDEFINED_SERVERS).join(', ')}`);
+    // Use robust environment validation
+    const validatedConfig = environmentValidator.getSecureConfig(serverName);
+    
+    if (!validatedConfig) {
+      // Get validation details for better error reporting
+      const validation = environmentValidator.validateServerConfig(serverName);
+      const errorMessage = validation.errors.join('; ');
+      
+      throw new SSHAuthenticationError(
+        `Server configuration validation failed for ${serverName}: ${errorMessage}`,
+        serverName,
+        'CONFIG_VALIDATION_FAILED'
+      );
     }
+    
+    // Log configuration usage for audit
+    await this.auditLogger.logEvent(AuditEventType.SSH_COMMAND_EXECUTED, {
+      description: `Quick connect initiated for server: ${serverName}`,
+      outcome: 'unknown',
+      eventDetails: {
+        serverName,
+        host: validatedConfig.host,
+        username: validatedConfig.username,
+        authMethod: validatedConfig.password ? 'password' : validatedConfig.privateKey ? 'privateKey' : 'privateKeyPath'
+      }
+    });
 
     const sessionId = uuidv4();
+    let serverConfig: ServerConfig;
     
     try {
-      const session = await this.createSessionWithConfig(sessionId, config);
+      // Create session with validated configuration
+      let privateKey = validatedConfig.privateKey;
+      
+      // If privateKeyPath is provided, read the key content
+      if (validatedConfig.privateKeyPath && !privateKey) {
+        try {
+          privateKey = fs.readFileSync(validatedConfig.privateKeyPath, 'utf8');
+        } catch (error) {
+          throw new SSHAuthenticationError(
+            `Failed to read private key from ${validatedConfig.privateKeyPath}`,
+            'privatekey',
+            validatedConfig.username,
+            { host: validatedConfig.host }
+          );
+        }
+      }
+      
+      serverConfig = {
+        host: validatedConfig.host,
+        port: validatedConfig.port,
+        username: validatedConfig.username,
+        password: validatedConfig.password,
+        privateKey: privateKey,
+        passphrase: validatedConfig.passphrase,
+        defaultDir: validatedConfig.defaultDir || '/home/' + validatedConfig.username,
+        description: validatedConfig.description || serverName
+      };
+      const session = await this.createSessionWithConfig(sessionId, serverConfig);
       this.sessions.set(sessionId, session);
+      
+      // Log successful connection
+      await this.auditLogger.logEvent(AuditEventType.SSH_COMMAND_EXECUTED, {
+        sessionId,
+        description: `Quick connect successful for server: ${serverName}`,
+        outcome: 'success',
+        eventDetails: {
+          serverName,
+          host: serverConfig.host
+        }
+      });
       
       return sessionId;
     } catch (error: any) {
-      throw new Error(`Failed to connect to ${serverName}: ${error.message}`);
+      // Log connection failure
+      await this.auditLogger.logEvent(AuditEventType.SSH_COMMAND_EXECUTED, {
+        sessionId,
+        description: `Quick connect failed for server: ${serverName}`,
+        outcome: 'failure',
+        eventDetails: {
+          serverName,
+          error: error.message
+        }
+      });
+      
+      throw new SSHConnectionError(
+        `Failed to connect to ${serverName}: ${error.message}`,
+        validatedConfig.host,
+        validatedConfig.port,
+        error instanceof Error ? error : undefined,
+        { sessionId }
+      );
     }
   }
 
@@ -1871,6 +2030,109 @@ class SSHService {
     return this.sitemapTool.createOrUpdateSitemap(sitemapParams);
   }
 
+  /**
+   * Get session by ID
+   */
+  getSession(sessionId: string): SSHSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  // Cache management methods
+  async initializeCache(): Promise<void> {
+    try {
+      await this.cacheManager.connect();
+      await this.auditLogger.logEvent(AuditEventType.SERVER_START, {
+        description: 'Redis cache initialized successfully',
+        outcome: 'success',
+        eventDetails: { config: this.cacheManager.getConfig() }
+      });
+    } catch (error) {
+      await this.auditLogger.logEvent(AuditEventType.COMPLIANCE_VIOLATION, {
+        description: 'Failed to initialize Redis cache',
+        outcome: 'failure',
+        eventDetails: { error: error instanceof Error ? error.message : String(error) }
+      });
+      // Continue without cache if Redis is unavailable
+    }
+  }
+
+  async getCacheStats(): Promise<CacheMetrics> {
+    return await this.cacheManager.getStats();
+  }
+
+  async clearCache(): Promise<number> {
+    return await this.cacheManager.clear();
+  }
+
+  async cacheHealthCheck(): Promise<{ healthy: boolean; connected: boolean; latency: number; error?: string }> {
+    return await this.cacheManager.healthCheck();
+  }
+
+  // Enhanced command execution with caching
+  async executeCommandWithCache(sessionId: string, command: string, options: any = {}): Promise<any> {
+    // Create cache key based on session and command
+    const cacheKey = `cmd:${sessionId}:${Buffer.from(command).toString('base64')}`;
+    
+    // Check cache first for non-destructive commands
+    const isReadOnlyCommand = this.isReadOnlyCommand(command);
+    if (isReadOnlyCommand) {
+      const cachedResult = await this.cacheManager.get(cacheKey);
+      if (cachedResult) {
+        await this.auditLogger.logEvent(AuditEventType.SERVER_START, {
+          description: 'Command result served from cache',
+          outcome: 'success',
+          eventDetails: { command, sessionId, cacheHit: true }
+        });
+        return cachedResult;
+      }
+    }
+
+    // Execute command normally
+    const result = await this.executeCommand({ sessionId, command, ...options });
+    
+    // Cache result if successful and read-only (result is a string for success)
+    if (isReadOnlyCommand && typeof result === 'string') {
+      await this.cacheManager.set(cacheKey, { success: true, output: result }, 60); // Cache for 60 seconds
+    }
+
+    return result;
+  }
+
+  private isReadOnlyCommand(command: string): boolean {
+    const readOnlyCommands = [
+      'ls', 'cat', 'head', 'tail', 'pwd', 'whoami', 'id', 'ps', 'df', 'free', 'uptime',
+      'find', 'grep', 'awk', 'sed', 'sort', 'uniq', 'wc', 'stat', 'file', 'which',
+      'whereis', 'locate', 'du', 'mount', 'lsof', 'netstat', 'ss', 'uname', 'hostname'
+    ];
+    
+    const cmdParts = command.trim().split(/\s+/);
+    const baseCommand = cmdParts[0];
+    
+    return readOnlyCommands.includes(baseCommand) || 
+           command.includes('--help') || 
+           command.includes('--version');
+  }
+
+  // Enhanced server configuration with caching
+  async getServerConfigWithCache(serverName: string): Promise<any> {
+    const cacheKey = `server:${serverName}`;
+    
+    // Check cache first
+    const cachedConfig = await this.cacheManager.get(cacheKey);
+    if (cachedConfig) {
+      return cachedConfig;
+    }
+
+    // Get fresh config
+    const config = environmentValidator.getSecureConfig(serverName);
+    if (config) {
+      // Cache for 5 minutes
+      await this.cacheManager.set(cacheKey, config, 300);
+    }
+
+    return config;
+  }
+
   // Graceful shutdown
   async shutdown(): Promise<void> {
     console.error('Shutting down SSH service...');
@@ -1899,6 +2161,9 @@ class SSHService {
     // Shutdown compliance manager
     await this.complianceManager.shutdown();
     
+    // Shutdown cache manager
+    await this.cacheManager.disconnect();
+    
     console.error('SSH service shutdown complete');
   }
 }
@@ -1917,6 +2182,9 @@ const server = new Server(
 );
 
 const sshService = new SSHService();
+
+// Initialize cache asynchronously
+sshService.initializeCache().catch(console.error);
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -3613,6 +3881,292 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["sessionId", "workflowType", "steps"]
         }
+      },
+      {
+        name: "execute_agentic_workflow",
+        description: "Execute sophisticated agentic workflows that autonomously orchestrate multiple SSH-MCP tools",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sessionId: {
+              type: "string",
+              description: "Session ID for workflow execution"
+            },
+            workflowName: {
+              type: "string",
+              description: "Name of the agentic workflow to execute",
+              enum: ["agentic_deploy_full_stack", "agentic_security_audit_fix", "agentic_performance_optimize", "agentic_disaster_recovery", "agentic_environment_sync"]
+            },
+            parameters: {
+              type: "object",
+              description: "Parameters for the workflow execution",
+              properties: {
+                projectPath: {
+                  type: "string",
+                  description: "Path to the project directory"
+                },
+                environment: {
+                  type: "string",
+                  description: "Target environment (development, staging, production)",
+                  enum: ["development", "staging", "production", "testing"]
+                },
+                deploymentStrategy: {
+                  type: "string",
+                  description: "Deployment strategy for full-stack deployment",
+                  enum: ["blue-green", "rolling", "instant"]
+                },
+                scope: {
+                  type: "string",
+                  description: "Scope for security audit",
+                  enum: ["full-system", "application", "infrastructure"]
+                },
+                remediationLevel: {
+                  type: "string",
+                  description: "Level of automated remediation",
+                  enum: ["automatic", "suggested", "audit-only"]
+                },
+                complianceFrameworks: {
+                  type: "array",
+                  description: "Compliance frameworks to check",
+                  items: {
+                    type: "string",
+                    enum: ["soc2", "gdpr", "hipaa", "pci"]
+                  }
+                },
+                optimizationScope: {
+                  type: "string",
+                  description: "Scope for performance optimization",
+                  enum: ["application", "database", "infrastructure", "full-stack"]
+                },
+                performanceTargets: {
+                  type: "object",
+                  description: "Performance targets for optimization",
+                  properties: {
+                    responseTime: { type: "number" },
+                    throughput: { type: "number" },
+                    resourceUtilization: { type: "number" }
+                  }
+                },
+                budgetConstraints: {
+                  type: "object",
+                  description: "Budget constraints for optimizations",
+                  properties: {
+                    maxCost: { type: "number" },
+                    currency: { type: "string" }
+                  }
+                },
+                incidentType: {
+                  type: "string",
+                  description: "Type of incident for disaster recovery",
+                  enum: ["data-loss", "security-breach", "infrastructure-failure", "application-failure"]
+                },
+                recoveryTimeObjective: {
+                  type: "number",
+                  description: "Maximum acceptable downtime in minutes"
+                },
+                recoveryPointObjective: {
+                  type: "number",
+                  description: "Maximum acceptable data loss in minutes"
+                },
+                businessPriority: {
+                  type: "string",
+                  description: "Business priority level",
+                  enum: ["critical", "high", "medium", "low"]
+                },
+                sourceEnvironment: {
+                  type: "string",
+                  description: "Source environment for synchronization",
+                  enum: ["production", "staging", "development"]
+                },
+                targetEnvironments: {
+                  type: "array",
+                  description: "Target environments for synchronization",
+                  items: {
+                    type: "string",
+                    enum: ["production", "staging", "development"]
+                  }
+                },
+                syncScope: {
+                  type: "string",
+                  description: "Scope of synchronization",
+                  enum: ["configuration", "infrastructure", "data", "full"]
+                },
+                validationLevel: {
+                  type: "string",
+                  description: "Level of validation for synchronization",
+                  enum: ["basic", "comprehensive", "compliance-focused"]
+                }
+              }
+            },
+            options: {
+              type: "object",
+              description: "Execution options",
+              properties: {
+                dryRun: {
+                  type: "boolean",
+                  description: "Run in dry-run mode (no actual changes)"
+                },
+                verbose: {
+                  type: "boolean",
+                  description: "Enable verbose logging"
+                },
+                timeoutMs: {
+                  type: "number",
+                  description: "Timeout for workflow execution in milliseconds"
+                }
+              }
+            }
+          },
+          required: ["sessionId", "workflowName", "parameters"]
+        }
+      },
+      {
+        name: "list_agentic_workflows",
+        description: "List all available agentic workflows with their descriptions and parameters",
+        inputSchema: {
+          type: "object",
+          properties: {
+            category: {
+              type: "string",
+              description: "Filter workflows by category",
+              enum: ["deployment", "security", "performance", "recovery", "synchronization", "all"]
+            }
+          }
+        }
+      },
+      {
+        name: "get_agentic_workflow_info",
+        description: "Get detailed information about a specific agentic workflow",
+        inputSchema: {
+          type: "object",
+          properties: {
+            workflowName: {
+              type: "string",
+              description: "Name of the agentic workflow to get information about"
+            }
+          },
+          required: ["workflowName"]
+        }
+      },
+      {
+        name: "get_agentic_workflow_history",
+        description: "Get execution history and insights for agentic workflows",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sessionId: {
+              type: "string",
+              description: "Session ID to get history for"
+            },
+            workflowName: {
+              type: "string",
+              description: "Specific workflow to get history for (optional)"
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of history entries to return"
+            }
+          },
+          required: ["sessionId"]
+        }
+      },
+      {
+        name: "execute_parallel_agentic_workflows",
+        description: "Execute multiple agentic workflows in parallel for coordinated operations",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sessionId: {
+              type: "string",
+              description: "Session ID for workflow execution"
+            },
+            workflows: {
+              type: "array",
+              description: "Array of workflows to execute in parallel",
+              items: {
+                type: "object",
+                properties: {
+                  workflowName: {
+                    type: "string",
+                    description: "Name of the workflow to execute"
+                  },
+                  parameters: {
+                    type: "object",
+                    description: "Parameters for the workflow"
+                  },
+                  priority: {
+                    type: "string",
+                    description: "Execution priority",
+                    enum: ["high", "medium", "low"]
+                  }
+                },
+                required: ["workflowName", "parameters"]
+              }
+            },
+            coordinationStrategy: {
+              type: "string",
+              description: "How to coordinate the parallel workflows",
+              enum: ["independent", "sequential-dependencies", "conditional-execution"]
+            }
+          },
+          required: ["sessionId", "workflows"]
+        }
+      },
+      {
+        name: "get_cache_stats",
+        description: "Get Redis cache performance statistics and metrics",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "clear_cache",
+        description: "Clear all cached data from Redis",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "cache_health_check",
+        description: "Check Redis cache health and connectivity",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "execute_command_with_cache",
+        description: "Execute a command with intelligent caching for improved performance",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sessionId: {
+              type: "string",
+              description: "SSH session ID"
+            },
+            command: {
+              type: "string",
+              description: "Command to execute"
+            },
+            options: {
+              type: "object",
+              description: "Command execution options",
+              properties: {
+                timeout: {
+                  type: "number",
+                  description: "Command timeout in milliseconds"
+                },
+                cwd: {
+                  type: "string",
+                  description: "Working directory for the command"
+                }
+              }
+            }
+          },
+          required: ["sessionId", "command"]
+        }
       }
     ]
   };
@@ -4996,6 +5550,379 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             text: prompt
           }]
         };
+      }
+
+      case "execute_agentic_workflow": {
+        const { sessionId, workflowName, parameters, options } = request.params.arguments as {
+          sessionId: string;
+          workflowName: string;
+          parameters: Record<string, any>;
+          options?: {
+            dryRun?: boolean;
+            verbose?: boolean;
+            timeoutMs?: number;
+          };
+        };
+
+        // Validate parameters
+        const validation = validateAgenticCommand(workflowName, parameters);
+        if (!validation.valid) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `Invalid agentic workflow parameters: ${validation.errors.join(', ')}`
+          );
+        }
+
+        // Create execution context
+        const context = createExecutionContext(sessionId, {
+          projectPath: parameters.projectPath,
+          environment: parameters.environment,
+          timeoutMs: options?.timeoutMs,
+          dryRun: options?.dryRun,
+          verbose: options?.verbose
+        });
+
+        try {
+          // Execute the agentic workflow
+          const result = await sshService.agenticOrchestrator.executeAgenticWorkflow(
+            workflowName,
+            parameters,
+            context
+          );
+
+          // Log the workflow execution
+          await sshService.auditLogger.logEvent(AuditEventType.SSH_COMMAND_EXECUTED, {
+            sessionId,
+            description: `Agentic workflow executed: ${workflowName}`,
+            outcome: result.workflowResult.success ? 'success' : 'failure',
+            eventDetails: {
+              workflowName,
+              executionTime: result.performanceMetrics.totalExecutionTime,
+              stepsExecuted: result.workflowResult.executedSteps.length,
+              recommendations: result.recommendedActions.length
+            }
+          });
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: result.workflowResult.success,
+                workflow: workflowName,
+                executionSummary: {
+                  stepsExecuted: result.workflowResult.executedSteps,
+                  totalTime: result.performanceMetrics.totalExecutionTime,
+                  results: result.workflowResult.results,
+                  errors: result.workflowResult.errors
+                },
+                insights: {
+                  decisionInsights: result.decisionInsights,
+                  recommendedActions: result.recommendedActions
+                },
+                performance: result.performanceMetrics,
+                timestamp: new Date().toISOString()
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Agentic workflow execution failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "list_agentic_workflows": {
+        const { category } = request.params.arguments as { category?: string };
+
+        try {
+          const availableCommands = sshService.agenticOrchestrator.getAvailableCommands();
+          
+          // Filter by category if specified
+          const filteredCommands = category && category !== 'all' 
+            ? availableCommands.filter(cmd => {
+                const categoryMap: Record<string, string[]> = {
+                  deployment: ['agentic_deploy_full_stack'],
+                  security: ['agentic_security_audit_fix'],
+                  performance: ['agentic_performance_optimize'],
+                  recovery: ['agentic_disaster_recovery'],
+                  synchronization: ['agentic_environment_sync']
+                };
+                return categoryMap[category]?.includes(cmd);
+              })
+            : availableCommands;
+
+          const workflowDetails = filteredCommands.map(cmd => {
+            const info = sshService.agenticOrchestrator.getCommandInfo(cmd);
+            return {
+              name: cmd,
+              description: info?.description || 'Agentic workflow',
+              category: categorizeWorkflow(cmd),
+              tools: info?.tools || [],
+              parameters: info?.parameters || [],
+              successCriteria: info?.successCriteria || []
+            };
+          });
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                totalWorkflows: workflowDetails.length,
+                category: category || 'all',
+                workflows: workflowDetails,
+                timestamp: new Date().toISOString()
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to list agentic workflows: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "get_agentic_workflow_info": {
+        const { workflowName } = request.params.arguments as { workflowName: string };
+
+        try {
+          const info = sshService.agenticOrchestrator.getCommandInfo(workflowName);
+          
+          if (!info) {
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              `Unknown agentic workflow: ${workflowName}`
+            );
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                workflow: info,
+                category: categorizeWorkflow(workflowName),
+                complexity: assessComplexity(info),
+                estimatedDuration: estimateDuration(info),
+                requirements: getRequirements(workflowName),
+                timestamp: new Date().toISOString()
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to get workflow info: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "get_agentic_workflow_history": {
+        const { sessionId, workflowName, limit } = request.params.arguments as {
+          sessionId: string;
+          workflowName?: string;
+          limit?: number;
+        };
+
+        try {
+          const history = await sshService.agenticOrchestrator.getWorkflowHistory(
+            sessionId,
+            workflowName
+          );
+
+          // Apply limit if specified
+          const limitedHistory = limit 
+            ? {
+                ...history,
+                executionHistory: history.executionHistory.slice(0, limit)
+              }
+            : history;
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                sessionId,
+                workflowFilter: workflowName || 'all',
+                history: limitedHistory,
+                timestamp: new Date().toISOString()
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to get workflow history: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "execute_parallel_agentic_workflows": {
+        const { sessionId, workflows, coordinationStrategy } = request.params.arguments as {
+          sessionId: string;
+          workflows: Array<{
+            workflowName: string;
+            parameters: Record<string, any>;
+            priority?: string;
+          }>;
+          coordinationStrategy?: string;
+        };
+
+        try {
+          // Validate all workflows first
+          for (const workflow of workflows) {
+            const validation = validateAgenticCommand(workflow.workflowName, workflow.parameters);
+            if (!validation.valid) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                `Invalid workflow ${workflow.workflowName}: ${validation.errors.join(', ')}`
+              );
+            }
+          }
+
+          // Prepare workflow executions
+          const workflowExecutions = workflows.map(workflow => ({
+            commandName: workflow.workflowName,
+            parameters: workflow.parameters,
+            context: createExecutionContext(sessionId, {
+              projectPath: workflow.parameters.projectPath,
+              environment: workflow.parameters.environment
+            })
+          }));
+
+          // Execute workflows in parallel
+          const results = await sshService.agenticOrchestrator.executeParallelWorkflows(
+            workflowExecutions
+          );
+
+          // Log parallel execution
+          await sshService.auditLogger.logEvent(AuditEventType.SSH_COMMAND_EXECUTED, {
+            sessionId,
+            description: `Parallel agentic workflows executed: ${workflows.length} workflows`,
+            outcome: results.every(r => r.workflowResult.success) ? 'success' : 'failure',
+            eventDetails: {
+              workflowCount: workflows.length,
+              coordinationStrategy: coordinationStrategy || 'independent',
+              successCount: results.filter(r => r.workflowResult.success).length,
+              totalExecutionTime: Math.max(...results.map(r => r.performanceMetrics.totalExecutionTime))
+            }
+          });
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                sessionId,
+                coordinationStrategy: coordinationStrategy || 'independent',
+                totalWorkflows: workflows.length,
+                results: results.map((result, index) => ({
+                  workflow: workflows[index].workflowName,
+                  success: result.workflowResult.success,
+                  executionTime: result.performanceMetrics.totalExecutionTime,
+                  stepsExecuted: result.workflowResult.executedSteps.length,
+                  errors: result.workflowResult.errors,
+                  recommendations: result.recommendedActions
+                })),
+                summary: {
+                  overallSuccess: results.every(r => r.workflowResult.success),
+                  successRate: results.filter(r => r.workflowResult.success).length / results.length,
+                  totalExecutionTime: Math.max(...results.map(r => r.performanceMetrics.totalExecutionTime)),
+                  totalRecommendations: results.reduce((sum, r) => sum + r.recommendedActions.length, 0)
+                },
+                timestamp: new Date().toISOString()
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to execute parallel workflows: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "get_cache_stats": {
+        try {
+          const stats = await sshService.getCacheStats();
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                cacheStats: stats
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to get cache stats: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "clear_cache": {
+        try {
+          const deletedCount = await sshService.clearCache();
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: `Cache cleared successfully`,
+                deletedEntries: deletedCount
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to clear cache: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "cache_health_check": {
+        try {
+          const health = await sshService.cacheHealthCheck();
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                cacheHealth: health
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to check cache health: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
+      case "execute_command_with_cache": {
+        try {
+          const { sessionId, command, options = {} } = request.params.arguments as {
+            sessionId: string;
+            command: string;
+            options?: any;
+          };
+          
+          const result = await sshService.executeCommandWithCache(sessionId, command, options);
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify(result, null, 2)
+            }]
+          };
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to execute command with cache: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       }
 
       default:

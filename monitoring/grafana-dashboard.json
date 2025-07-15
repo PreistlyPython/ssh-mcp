@@ -1,0 +1,186 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SSH-MCP System Dashboard",
+    "tags": ["ssh-mcp", "monitoring", "lyftium"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "SSH Connection Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ssh_active_connections",
+            "legendFormat": "Active Connections"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 30},
+                {"color": "red", "value": 80}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Connection Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(ssh_connection_successes_total[5m]) / (rate(ssh_connection_successes_total[5m]) + rate(ssh_connection_failures_total[5m])) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "SSH Command Execution Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ssh_commands_total[5m])",
+            "legendFormat": "Commands/sec"
+          }
+        ],
+        "xAxis": {"show": true},
+        "yAxis": {"show": true, "label": "Commands per second"},
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Command Execution Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, ssh_command_duration_seconds_bucket)",
+            "legendFormat": "50th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, ssh_command_duration_seconds_bucket)",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.99, ssh_command_duration_seconds_bucket)",
+            "legendFormat": "99th percentile"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Response Time (seconds)"},
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Cache Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "cache_hit_rate",
+            "legendFormat": "Hit Rate %"
+          },
+          {
+            "expr": "rate(cache_operations_total[5m])",
+            "legendFormat": "Operations/sec"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Cache Metrics"},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 6,
+        "title": "System Resources",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %"
+          },
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage %"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Usage %"},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "Agentic Workflow Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(agentic_workflow_executions_total[5m])",
+            "legendFormat": "Executions/sec"
+          },
+          {
+            "expr": "rate(agentic_workflow_failures_total[5m])",
+            "legendFormat": "Failures/sec"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Workflows per second"},
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+      },
+      {
+        "id": 8,
+        "title": "Security Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(security_violations_total[5m])",
+            "legendFormat": "Security Violations"
+          },
+          {
+            "expr": "rate(authentication_failures_total[5m])",
+            "legendFormat": "Auth Failures"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Events per second"},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}
+      },
+      {
+        "id": 9,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ssh_errors_total[5m])",
+            "legendFormat": "SSH Errors"
+          },
+          {
+            "expr": "rate(application_errors_total[5m])",
+            "legendFormat": "Application Errors"
+          }
+        ],
+        "yAxis": {"show": true, "label": "Errors per second"},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s",
+    "version": 1
+  }
+}

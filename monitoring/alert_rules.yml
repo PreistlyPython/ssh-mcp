@@ -1,0 +1,146 @@
+# Prometheus alert rules for SSH-MCP monitoring
+# Generated for LYFTIUM-INC SSH-MCP project
+
+groups:
+  - name: ssh-mcp-alerts
+    rules:
+      # SSH Connection Alerts
+      - alert: SSHConnectionFailureRate
+        expr: rate(ssh_connection_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High SSH connection failure rate"
+          description: "SSH connection failure rate is {{ $value }} failures per second"
+
+      - alert: SSHConnectionsHigh
+        expr: ssh_active_connections > 50
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active SSH connections"
+          description: "Currently {{ $value }} active SSH connections"
+
+      - alert: SSHConnectionsOverflow
+        expr: ssh_active_connections > 90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSH connection pool near capacity"
+          description: "{{ $value }} active connections approaching pool limit"
+
+      # Performance Alerts
+      - alert: SSHCommandLatencyHigh
+        expr: histogram_quantile(0.95, ssh_command_duration_seconds_bucket) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High SSH command latency"
+          description: "95th percentile command execution time is {{ $value }}s"
+
+      - alert: SSHCommandTimeouts
+        expr: rate(ssh_command_timeouts_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSH command timeouts detected"
+          description: "Command timeout rate is {{ $value }} per second"
+
+      # System Resource Alerts
+      - alert: CPUUsageHigh
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: MemoryUsageHigh
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}%"
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}%"
+
+      # SSH-MCP Specific Alerts
+      - alert: SSHMCPServerDown
+        expr: up{job="ssh-mcp"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSH-MCP server is down"
+          description: "SSH-MCP server has been down for more than 1 minute"
+
+      - alert: CacheHitRateLow
+        expr: cache_hit_rate < 0.7
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value }}%"
+
+      - alert: SecurityViolations
+        expr: rate(security_violations_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Security violations detected"
+          description: "Security violation rate is {{ $value }} per second"
+
+      # Redis Alerts (if using Redis)
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis server is down"
+          description: "Redis server has been down for more than 1 minute"
+
+      - alert: RedisMemoryUsageHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is {{ $value }}%"
+
+      # Agentic Workflow Alerts
+      - alert: AgenticWorkflowFailures
+        expr: rate(agentic_workflow_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High agentic workflow failure rate"
+          description: "Agentic workflow failure rate is {{ $value }} per second"
+
+      - alert: AgenticWorkflowLatencyHigh
+        expr: histogram_quantile(0.95, agentic_workflow_duration_seconds_bucket) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High agentic workflow latency"
+          description: "95th percentile workflow execution time is {{ $value }}s"

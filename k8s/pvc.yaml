@@ -1,0 +1,141 @@
+# SSH-MCP Kubernetes Persistent Volume Claims
+# Defines storage requirements for SSH-MCP components
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ssh-mcp-data
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: fast-ssd # Adjust based on your cluster
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ssh-mcp-logs
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ssh-mcp-backups
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ssh-mcp-compliance
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-data
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: fast-ssd

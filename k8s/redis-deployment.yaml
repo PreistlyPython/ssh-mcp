@@ -1,0 +1,230 @@
+# Redis Kubernetes Deployment
+# High-performance caching layer for SSH-MCP
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp-redis
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        args:
+        - redis-server
+        - /etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: redis-password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis/redis.conf
+          subPath: redis.conf
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 999
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data
+      - name: redis-config
+        configMap:
+          name: ssh-mcp-config
+          items:
+          - key: redis.conf
+            path: redis.conf
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-redis
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: redis
+spec:
+  selector:
+    app: ssh-mcp
+    component: redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp-redis-exporter
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: redis-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: redis-exporter
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: redis-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+      - name: redis-exporter
+        image: oliver006/redis_exporter:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9121
+          name: metrics
+          protocol: TCP
+        env:
+        - name: REDIS_ADDR
+          value: "redis://ssh-mcp-redis:6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: redis-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9121
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9121
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-redis-exporter
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: redis-exporter
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: ssh-mcp
+    component: redis-exporter
+  ports:
+  - name: metrics
+    port: 9121
+    targetPort: 9121
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None

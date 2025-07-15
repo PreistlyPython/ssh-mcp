@@ -1,0 +1,365 @@
+# Monitoring Stack Kubernetes Deployment
+# Prometheus, Grafana, and Alertmanager for SSH-MCP
+# 
+# Author: Andre (OptinampOut) with Claude Code assistance
+# Organization: LYFTIUM-INC
+# Date: July 15, 2025
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp-prometheus
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: prometheus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: prometheus
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: prometheus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9090
+          name: prometheus
+          protocol: TCP
+        args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=15d
+        - --web.enable-lifecycle
+        - --web.console.libraries=/etc/prometheus/console_libraries
+        - --web.console.templates=/etc/prometheus/consoles
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: prometheus-data
+          mountPath: /prometheus
+        - name: prometheus-config
+          mountPath: /etc/prometheus/prometheus.yml
+          subPath: prometheus.yml
+          readOnly: true
+        - name: prometheus-rules
+          mountPath: /etc/prometheus/alert_rules.yml
+          subPath: alert_rules.yml
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: prometheus-data
+        persistentVolumeClaim:
+          claimName: prometheus-data
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+          items:
+          - key: prometheus.yml
+            path: prometheus.yml
+      - name: prometheus-rules
+        configMap:
+          name: prometheus-config
+          items:
+          - key: alert_rules.yml
+            path: alert_rules.yml
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-prometheus
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: prometheus
+spec:
+  selector:
+    app: ssh-mcp
+    component: prometheus
+  ports:
+  - name: prometheus
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp-grafana
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: grafana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: grafana
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: grafana
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: grafana
+          protocol: TCP
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ssh-mcp-secrets
+              key: grafana-admin-password
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel,grafana-worldmap-panel"
+        - name: GF_DATABASE_TYPE
+          value: "sqlite3"
+        - name: GF_DATABASE_PATH
+          value: "/var/lib/grafana/grafana.db"
+        - name: GF_ANALYTICS_REPORTING_ENABLED
+          value: "false"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: grafana-data
+          mountPath: /var/lib/grafana
+        - name: grafana-config
+          mountPath: /etc/grafana/grafana.ini
+          subPath: grafana.ini
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 472
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: grafana-data
+        persistentVolumeClaim:
+          claimName: grafana-data
+      - name: grafana-config
+        configMap:
+          name: grafana-config
+          items:
+          - key: grafana.ini
+            path: grafana.ini
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-grafana
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: grafana
+spec:
+  selector:
+    app: ssh-mcp
+    component: grafana
+  ports:
+  - name: grafana
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-mcp-alertmanager
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: alertmanager
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ssh-mcp
+      component: alertmanager
+  template:
+    metadata:
+      labels:
+        app: ssh-mcp
+        component: alertmanager
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9093
+          name: alertmanager
+          protocol: TCP
+        args:
+        - --config.file=/etc/alertmanager/alertmanager.yml
+        - --storage.path=/alertmanager
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: alertmanager-data
+          mountPath: /alertmanager
+        - name: alertmanager-config
+          mountPath: /etc/alertmanager/alertmanager.yml
+          subPath: alertmanager.yml
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: alertmanager-data
+        persistentVolumeClaim:
+          claimName: alertmanager-data
+      - name: alertmanager-config
+        configMap:
+          name: alertmanager-config
+          items:
+          - key: alertmanager.yml
+            path: alertmanager.yml
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-mcp-alertmanager
+  namespace: ssh-mcp
+  labels:
+    app: ssh-mcp
+    component: alertmanager
+spec:
+  selector:
+    app: ssh-mcp
+    component: alertmanager
+  ports:
+  - name: alertmanager
+    port: 9093
+    targetPort: 9093
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
