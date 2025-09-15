@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20+-brightgreen.svg)](https://nodejs.org/)
 [![Enterprise Ready](https://img.shields.io/badge/Enterprise-Ready-gold.svg)](#enterprise-features)
 
-SSH-MCP is the first AI-native SSH management server that provides enterprise-grade remote operations with integrated AI intelligence, security compliance, and adaptive learning capabilities. It orchestrates multiple MCPs to deliver context-aware assistance, real-time documentation, and intelligent automation for remote development workflows.
+SSH-MCP is a SSH management MVP server that provides 
 
 ## 🌟 Key Features
 
